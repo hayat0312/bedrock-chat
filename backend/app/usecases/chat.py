@@ -334,10 +334,11 @@ def chat(
 
         result = converse_with_strands(
             bot=bot,
-            chat_input=chat_input,
+            model_name=chat_input.message.model,
             instructions=instructions,
             generation_params=generation_params,
             guardrail=guardrail,
+            enable_reasoning=chat_input.enable_reasoning,
             display_citation=display_citation,
             messages=messages,
             search_results=search_results,
@@ -350,10 +351,12 @@ def chat(
     else:
         result = converse_legacy(
             bot=bot,
-            chat_input=chat_input,
+            model_name=chat_input.message.model,
             instructions=instructions,
             generation_params=generation_params,
             guardrail=guardrail,
+            continue_generate=chat_input.continue_generate,
+            enable_reasoning=chat_input.enable_reasoning,
             display_citation=display_citation,
             messages=messages,
             search_results=search_results,
@@ -381,10 +384,12 @@ def chat(
 @deprecated("Use chat() instead")
 def converse_legacy(
     bot: BotModel | None,
-    chat_input: ChatInput,
+    model_name: type_model_name,
     instructions: list[str],
     generation_params: GenerationParamsModel | None,
     guardrail: BedrockGuardrailsModel | None,
+    continue_generate: bool,
+    enable_reasoning: bool,
     display_citation: bool,
     messages: list[SimpleMessageModel],
     search_results: list[SearchResult],
@@ -399,9 +404,9 @@ def converse_legacy(
     WARNING: This implementation is deprecated and will be removed in a future version.
     Please migrate to the Strands-based implementation by setting USE_STRANDS=true.
     """
-    tools = get_tools(bot, chat_input.message.model)
+    tools = get_tools(bot, model_name)
     stream_handler = ConverseApiStreamHandler(
-        model=chat_input.message.model,
+        model=model_name,
         instructions=instructions,
         generation_params=generation_params,
         guardrail=guardrail,
@@ -413,7 +418,7 @@ def converse_legacy(
 
     thinking_log: list[SimpleMessageModel] = []
 
-    continue_generate = chat_input.continue_generate
+    continue_generate = continue_generate
     input_token_count = 0
     output_token_count = 0
     cache_read_input_count = 0
@@ -424,7 +429,7 @@ def converse_legacy(
         result: OnStopInput = stream_handler.run(
             messages=messages,
             search_results=search_results,
-            enable_reasoning=chat_input.enable_reasoning,
+            enable_reasoning=enable_reasoning,
             prompt_caching_enabled=(
                 bot.prompt_caching_enabled if bot is not None else True
             ),
@@ -485,7 +490,7 @@ def converse_legacy(
             run_result = tool.run(
                 tool_use_id=content.body.tool_use_id,
                 input=content.body.input,
-                model=chat_input.message.model,
+                model=model_name,
                 bot=bot,
             )
             run_results.append(run_result)
@@ -498,7 +503,7 @@ def converse_legacy(
             content=[
                 ToolResultContentModel.from_tool_run_result(
                     run_result=result,
-                    model=chat_input.message.model,
+                    model=model_name,
                     display_citation=display_citation,
                 )
                 for result in run_results

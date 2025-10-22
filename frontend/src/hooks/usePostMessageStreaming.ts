@@ -1,5 +1,5 @@
 import { fetchAuthSession } from 'aws-amplify/auth';
-import { PostMessageRequest } from '../@types/conversation';
+import { ConversationRequest } from '../@types/conversation';
 import { create } from 'zustand';
 import i18next from 'i18next';
 import { StreamingEvent } from './xstates/streaming';
@@ -10,7 +10,7 @@ const CHUNK_SIZE = 32 * 1024; //32KB
 
 const usePostMessageStreaming = create<{
   post: (params: {
-    input: PostMessageRequest;
+    request: ConversationRequest;
     hasKnowledge?: boolean;
     handleStreamingEvent: (event: StreamingEvent) => void;
   }) => Promise<void>;
@@ -18,7 +18,7 @@ const usePostMessageStreaming = create<{
 }>((set) => {
   return {
     errorDetail: null,
-    post: async ({ input, handleStreamingEvent }) => {
+    post: async ({ request: input, handleStreamingEvent }) => {
       handleStreamingEvent({ type: 'wakeup' });
 
       const token = (await fetchAuthSession()).tokens?.idToken?.toString();

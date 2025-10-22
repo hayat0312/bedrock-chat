@@ -203,6 +203,25 @@ class ChatInput(BaseSchema):
     enable_reasoning: bool = Field(False)
 
 
+class PostMessageRequest(ChatInput):
+    type: Literal["post_message"]
+
+
+class CompactConversationRequest(BaseSchema):
+    type: Literal["compact_conversation"]
+    conversation_id: str
+    model: type_model_name
+    parent_message_id: str | None
+    bot_id: str | None = None
+
+
+ChatRequest = Annotated[
+    PostMessageRequest
+    | CompactConversationRequest,
+    Discriminator("type"),
+]
+
+
 class ChatOutput(BaseSchema):
     conversation_id: str
     message: MessageOutput

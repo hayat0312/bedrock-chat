@@ -2,7 +2,7 @@ import { MutatorCallback, useSWRConfig } from 'swr';
 import {
   Conversation,
   ConversationMeta,
-  PostMessageRequest,
+  ChatInput,
   PostMessageResponse,
   RelatedDocument,
 } from '../@types/conversation';
@@ -32,7 +32,7 @@ const useConversationApi = () => {
         }
       );
     },
-    postMessage: (input: PostMessageRequest) => {
+    postMessage: (input: ChatInput) => {
       return http.post<PostMessageResponse>('conversation', {
         ...input,
       });

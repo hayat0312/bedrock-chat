@@ -8,7 +8,7 @@ from typing import Callable
 
 from app.agents.tools.agent_tool import ToolRunResult
 from app.bedrock import calculate_price, BedrockGuardrailsModel
-from app.repositories.models.conversation import SimpleMessageModel
+from app.repositories.models.conversation import SimpleMessageModel, type_model_name
 from app.repositories.models.custom_bot import (
     BotModel,
     GenerationParamsModel,
@@ -33,10 +33,11 @@ logger = logging.getLogger(__name__)
 
 def converse_with_strands(
     bot: BotModel | None,
-    chat_input: ChatInput,
+    model_name: type_model_name,
     instructions: list[str],
     generation_params: GenerationParamsModel | None,
     guardrail: BedrockGuardrailsModel | None,
+    enable_reasoning: bool,
     display_citation: bool,
     messages: list[SimpleMessageModel],
     search_results: list[SearchResult],
@@ -83,10 +84,10 @@ def converse_with_strands(
     agent = create_strands_agent(
         bot=bot,
         instructions=instructions,
-        model_name=chat_input.message.model,
+        model_name=model_name,
         generation_params=generation_params,
         guardrail=guardrail,
-        enable_reasoning=chat_input.enable_reasoning,
+        enable_reasoning=enable_reasoning,
         prompt_caching_enabled=prompt_caching_enabled,
         has_tools=has_tools,
         hooks=[tool_capture],
@@ -110,7 +111,7 @@ def converse_with_strands(
     # Convert SimpleMessageModel list to Strands Messages format
     strands_messages = simple_message_models_to_strands_messages(
         simple_messages=messages,
-        model=chat_input.message.model,
+        model=model_name,
         guardrail=guardrail,
         search_results=search_results,
         prompt_caching_enabled=prompt_caching_enabled,
@@ -121,7 +122,7 @@ def converse_with_strands(
     # Convert Strands Message to MessageModel
     message = strands_message_to_message_model(
         message=result.message,
-        model_name=chat_input.message.model,
+        model_name=model_name,
         create_time=get_current_time(),
         thinking_log=thinking_log,
     )
@@ -138,7 +139,7 @@ def converse_with_strands(
 
     # Calculate price using the same function as chat_legacy
     price = calculate_price(
-        model=chat_input.message.model,
+        model=model_name,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         cache_read_input_tokens=cache_read_input_tokens,

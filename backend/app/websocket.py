@@ -9,12 +9,15 @@ from threading import Thread
 from typing import BinaryIO, Literal, TypedDict
 
 import boto3
+from pydantic import TypeAdapter
+
 from app.agents.tools.agent_tool import ToolRunResult
 from app.auth import verify_token
 from app.repositories.conversation import RecordNotFoundError
-from app.routes.schemas.conversation import ChatInput
+from app.routes.schemas.conversation import ChatInput, ChatRequest, CompactConversationRequest
 from app.stream import OnStopInput, OnThinking
 from app.usecases.chat import chat
+from app.usecases.compact_conversation import compact_conversation
 from app.user import User
 from boto3.dynamodb.conditions import Attr, Key
 
@@ -253,6 +256,61 @@ def process_chat_input(
         }
 
 
+def process_compact_conversation(
+    user: User,
+    request: CompactConversationRequest,
+    notificator: NotificationSender,
+) -> dict:
+    try:
+        print(f"compact_conversation: {request.model_dump_json()}")
+
+        compact_conversation(
+            user=user,
+            request=request,
+            on_stream=lambda token: notificator.on_stream(
+                token=token,
+            ),
+            on_stop=lambda arg: notificator.on_stop(
+                arg=arg,
+            ),
+        )
+        return {"statusCode": 200, "body": "Message sent."}
+
+    except RecordNotFoundError:
+        if request.bot_id:
+            return {
+                "statusCode": 404,
+                "body": json.dumps(
+                    dict(
+                        status="ERROR",
+                        reason=f"bot {request.bot_id} not found.",
+                    )
+                ),
+            }
+        else:
+            return {
+                "statusCode": 400,
+                "body": json.dumps(
+                    dict(
+                        status="ERROR",
+                        reason="Invalid request.",
+                    )
+                ),
+            }
+
+    except Exception as e:
+        logger.exception(f"Failed to run stream handler: {e}")
+        return {
+            "statusCode": 500,
+            "body": json.dumps(
+                dict(
+                    status="ERROR",
+                    reason=f"Failed to run stream handler: {e}",
+                )
+            ),
+        }
+
+
 def handler(event, context):
     logger.info(f"Received event: {event}")
     route_key = event["requestContext"]["routeKey"]
@@ -363,12 +421,20 @@ def handler(event, context):
             full_message = "".join(item["MessagePart"] for item in message_parts)
 
             # Process the concatenated full message
-            chat_input = ChatInput(**json.loads(full_message))
-            return process_chat_input(
-                user=user,
-                chat_input=chat_input,
-                notificator=notificator,
-            )
+            request = TypeAdapter(ChatRequest).validate_json(full_message)
+            if isinstance(request, ChatInput):
+                return process_chat_input(
+                    user=user,
+                    chat_input=request,
+                    notificator=notificator,
+                )
+
+            elif isinstance(request, CompactConversationRequest):
+                return process_compact_conversation(
+                    user=user,
+                    request=request,
+                    notificator=notificator,
+                )
 
         else:
             # Store the message part of full message

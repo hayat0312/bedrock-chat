@@ -111,7 +111,7 @@ export type DisplayMessageContent = MessageContent & {
   sibling: string[];
 };
 
-export type PostMessageRequest = {
+export type ChatInput = {
   conversationId?: string;
   message: MessageContent & {
     parentMessageId: null | string;
@@ -120,6 +120,22 @@ export type PostMessageRequest = {
   continueGenerate?: boolean;
   enableReasoning: boolean;
 };
+
+export type PostMessageRequest = {
+  type: 'post_message';
+} & ChatInput;
+
+export type CompactConversationRequest = {
+  type: 'compact_conversation';
+  conversationId?: string;
+  model: Model;
+  parentMessageId: null | string;
+  botId?: string;
+};
+
+export type ConversationRequest =
+  | PostMessageRequest
+  | CompactConversationRequest;
 
 export type PostMessageResponse = {
   conversationId: string;

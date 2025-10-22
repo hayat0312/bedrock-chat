@@ -11,6 +11,7 @@ import {
   PutFeedbackRequest,
   TextContent,
   Content,
+  CompactConversationRequest,
 } from '../@types/conversation';
 import useConversation from './useConversation';
 import { create } from 'zustand';
@@ -424,6 +425,7 @@ const useChat = () => {
       thinkingLog: null,
     };
     const input: PostMessageRequest = {
+      type: 'post_message',
       conversationId: isNewChat ? newConversationId : conversationId,
       message: {
         ...messageContent,
@@ -460,7 +462,7 @@ const useChat = () => {
           editMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT, state.context.text);
         });
         postStreaming({
-          input,
+          request: input,
           handleStreamingEvent: (event) => {
             streamingSend(event);
           },
@@ -523,6 +525,7 @@ const useChat = () => {
       thinkingLog: null,
     };
     const input: PostMessageRequest = {
+      type: 'post_message',
       conversationId: conversationId,
       message: {
         ...messageContent,
@@ -542,7 +545,7 @@ const useChat = () => {
       editMessage(conversationId, currentMessage.id, currentContentBody + state.context.text);
     });
     postStreaming({
-      input,
+      request: input,
       handleStreamingEvent: (event) => {
         streamingSend(event);
       },
@@ -599,6 +602,7 @@ const useChat = () => {
     }
 
     const input: PostMessageRequest = {
+      type: 'post_message',
       conversationId: conversationId,
       message: {
         ...parentMessage,
@@ -644,7 +648,64 @@ const useChat = () => {
       editMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT, state.context.text);
     });
     postStreaming({
-      input,
+      request: input,
+      handleStreamingEvent: (event) => {
+        streamingSend(event);
+      },
+    })
+      .then(() => {
+        mutate();
+      })
+      .catch((e) => {
+        console.error(e);
+        setCurrentMessageId(NEW_MESSAGE_ID.USER);
+        removeMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT);
+      })
+      .finally(() => {
+        subscription.unsubscribe();
+        setPostingMessage(false);
+      });
+  };
+
+  const compactConversation = (props?: {
+    bot?: BotInputType;
+  }) => {
+    const parentMessage = messages[messages.length - 1]
+    const request: CompactConversationRequest = {
+      type: 'compact_conversation',
+      conversationId: conversationId,
+      model: getPostedModel(),
+      parentMessageId: parentMessage.id,
+      botId: props?.bot?.botId,
+    };
+
+    setPostingMessage(true);
+
+    pushMessage(
+      conversationId,
+      parentMessage.id,
+      NEW_MESSAGE_ID.ASSISTANT,
+      {
+        role: 'assistant',
+        content: [
+          {
+            contentType: 'text',
+            body: '',
+          },
+        ],
+        model: request.model,
+        feedback: null,
+        usedChunks: null,
+        thinkingLog: null,
+      }
+    );
+    setCurrentMessageId(NEW_MESSAGE_ID.ASSISTANT);
+
+    const subscription = streamingActor.subscribe(state => {
+      editMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT, state.context.text);
+    });
+    postStreaming({
+      request,
       handleStreamingEvent: (event) => {
         streamingSend(event);
       },
@@ -683,6 +744,7 @@ const useChat = () => {
     setCurrentMessageId,
     postChat,
     regenerate,
+    compactConversation,
     getPostedModel,
     getShouldContinue,
     continueGenerate,

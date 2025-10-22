@@ -1,0 +1,654 @@
+diff --git a/backend/app/routes/schemas/conversation.py b/backend/app/routes/schemas/conversation.py
+index c3e219d..8ed292a 100644
+--- a/backend/app/routes/schemas/conversation.py
++++ b/backend/app/routes/schemas/conversation.py
+@@ -203,6 +203,25 @@ class ChatInput(BaseSchema):
+     enable_reasoning: bool = Field(False)
+ 
+ 
++class PostMessageRequest(ChatInput):
++    type: Literal["post_message"]
++
++
++class CompactConversationRequest(BaseSchema):
++    type: Literal["compact_conversation"]
++    conversation_id: str
++    model: type_model_name
++    parent_message_id: str | None
++    bot_id: str | None = None
++
++
++ChatRequest = Annotated[
++    PostMessageRequest
++    | CompactConversationRequest,
++    Discriminator("type"),
++]
++
++
+ class ChatOutput(BaseSchema):
+     conversation_id: str
+     message: MessageOutput
+diff --git a/backend/app/strands_integration/chat_strands.py b/backend/app/strands_integration/chat_strands.py
+index a5c0b10..285489a 100644
+--- a/backend/app/strands_integration/chat_strands.py
++++ b/backend/app/strands_integration/chat_strands.py
+@@ -8,7 +8,7 @@ from typing import Callable
+ 
+ from app.agents.tools.agent_tool import ToolRunResult
+ from app.bedrock import calculate_price, BedrockGuardrailsModel
+-from app.repositories.models.conversation import SimpleMessageModel
++from app.repositories.models.conversation import SimpleMessageModel, type_model_name
+ from app.repositories.models.custom_bot import (
+     BotModel,
+     GenerationParamsModel,
+@@ -33,10 +33,11 @@ logger = logging.getLogger(__name__)
+ 
+ def converse_with_strands(
+     bot: BotModel | None,
+-    chat_input: ChatInput,
++    model_name: type_model_name,
+     instructions: list[str],
+     generation_params: GenerationParamsModel | None,
+     guardrail: BedrockGuardrailsModel | None,
++    enable_reasoning: bool,
+     display_citation: bool,
+     messages: list[SimpleMessageModel],
+     search_results: list[SearchResult],
+@@ -83,10 +84,10 @@ def converse_with_strands(
+     agent = create_strands_agent(
+         bot=bot,
+         instructions=instructions,
+-        model_name=chat_input.message.model,
++        model_name=model_name,
+         generation_params=generation_params,
+         guardrail=guardrail,
+-        enable_reasoning=chat_input.enable_reasoning,
++        enable_reasoning=enable_reasoning,
+         prompt_caching_enabled=prompt_caching_enabled,
+         has_tools=has_tools,
+         hooks=[tool_capture],
+@@ -110,7 +111,7 @@ def converse_with_strands(
+     # Convert SimpleMessageModel list to Strands Messages format
+     strands_messages = simple_message_models_to_strands_messages(
+         simple_messages=messages,
+-        model=chat_input.message.model,
++        model=model_name,
+         guardrail=guardrail,
+         search_results=search_results,
+         prompt_caching_enabled=prompt_caching_enabled,
+@@ -121,7 +122,7 @@ def converse_with_strands(
+     # Convert Strands Message to MessageModel
+     message = strands_message_to_message_model(
+         message=result.message,
+-        model_name=chat_input.message.model,
++        model_name=model_name,
+         create_time=get_current_time(),
+         thinking_log=thinking_log,
+     )
+@@ -138,7 +139,7 @@ def converse_with_strands(
+ 
+     # Calculate price using the same function as chat_legacy
+     price = calculate_price(
+-        model=chat_input.message.model,
++        model=model_name,
+         input_tokens=input_tokens,
+         output_tokens=output_tokens,
+         cache_read_input_tokens=cache_read_input_tokens,
+diff --git a/backend/app/usecases/chat.py b/backend/app/usecases/chat.py
+index b8bacda..f1a35f7 100644
+--- a/backend/app/usecases/chat.py
++++ b/backend/app/usecases/chat.py
+@@ -334,10 +334,11 @@ def chat(
+ 
+         result = converse_with_strands(
+             bot=bot,
+-            chat_input=chat_input,
++            model_name=chat_input.message.model,
+             instructions=instructions,
+             generation_params=generation_params,
+             guardrail=guardrail,
++            enable_reasoning=chat_input.enable_reasoning,
+             display_citation=display_citation,
+             messages=messages,
+             search_results=search_results,
+@@ -350,10 +351,12 @@ def chat(
+     else:
+         result = converse_legacy(
+             bot=bot,
+-            chat_input=chat_input,
++            model_name=chat_input.message.model,
+             instructions=instructions,
+             generation_params=generation_params,
+             guardrail=guardrail,
++            continue_generate=chat_input.continue_generate,
++            enable_reasoning=chat_input.enable_reasoning,
+             display_citation=display_citation,
+             messages=messages,
+             search_results=search_results,
+@@ -381,10 +384,12 @@ def chat(
+ @deprecated("Use chat() instead")
+ def converse_legacy(
+     bot: BotModel | None,
+-    chat_input: ChatInput,
++    model_name: type_model_name,
+     instructions: list[str],
+     generation_params: GenerationParamsModel | None,
+     guardrail: BedrockGuardrailsModel | None,
++    continue_generate: bool,
++    enable_reasoning: bool,
+     display_citation: bool,
+     messages: list[SimpleMessageModel],
+     search_results: list[SearchResult],
+@@ -399,9 +404,9 @@ def converse_legacy(
+     WARNING: This implementation is deprecated and will be removed in a future version.
+     Please migrate to the Strands-based implementation by setting USE_STRANDS=true.
+     """
+-    tools = get_tools(bot, chat_input.message.model)
++    tools = get_tools(bot, model_name)
+     stream_handler = ConverseApiStreamHandler(
+-        model=chat_input.message.model,
++        model=model_name,
+         instructions=instructions,
+         generation_params=generation_params,
+         guardrail=guardrail,
+@@ -413,7 +418,7 @@ def converse_legacy(
+ 
+     thinking_log: list[SimpleMessageModel] = []
+ 
+-    continue_generate = chat_input.continue_generate
++    continue_generate = continue_generate
+     input_token_count = 0
+     output_token_count = 0
+     cache_read_input_count = 0
+@@ -424,7 +429,7 @@ def converse_legacy(
+         result: OnStopInput = stream_handler.run(
+             messages=messages,
+             search_results=search_results,
+-            enable_reasoning=chat_input.enable_reasoning,
++            enable_reasoning=enable_reasoning,
+             prompt_caching_enabled=(
+                 bot.prompt_caching_enabled if bot is not None else True
+             ),
+@@ -485,7 +490,7 @@ def converse_legacy(
+             run_result = tool.run(
+                 tool_use_id=content.body.tool_use_id,
+                 input=content.body.input,
+-                model=chat_input.message.model,
++                model=model_name,
+                 bot=bot,
+             )
+             run_results.append(run_result)
+@@ -498,7 +503,7 @@ def converse_legacy(
+             content=[
+                 ToolResultContentModel.from_tool_run_result(
+                     run_result=result,
+-                    model=chat_input.message.model,
++                    model=model_name,
+                     display_citation=display_citation,
+                 )
+                 for result in run_results
+diff --git a/backend/app/usecases/compact_conversation.py b/backend/app/usecases/compact_conversation.py
+new file mode 100644
+index 0000000..26241a6
+--- /dev/null
++++ b/backend/app/usecases/compact_conversation.py
+@@ -0,0 +1,93 @@
++import logging
++from typing import Callable
++
++from app.repositories.conversation import find_conversation_by_id
++from app.repositories.models.conversation import (
++    ConversationModel,
++    MessageModel,
++    SimpleMessageModel,
++    TextContentModel,
++)
++from app.routes.schemas.conversation import (
++    CompactConversationRequest,
++    ChatInput,
++    MessageInput,
++    TextContent,
++)
++from app.strands_integration.chat_strands import converse_with_strands
++from app.stream import OnStopInput
++from app.usecases.chat import chat, trace_to_root
++from app.user import User
++
++logger = logging.getLogger(__name__)
++logger.setLevel(logging.INFO)
++
++
++def compact_conversation(
++    user: User,
++    request: CompactConversationRequest,
++    on_stream: Callable[[str], None] | None = None,
++    on_stop: Callable[[OnStopInput], None] | None = None,
++) -> tuple[ConversationModel, MessageModel]:
++    conversation = find_conversation_by_id(user.id, request.conversation_id)
++    message_map = conversation.message_map
++
++    # これまでの会話内容
++    messages = trace_to_root(
++        node_id=request.parent_message_id,
++        message_map=message_map,
++    )
++
++    # strands agents を使って、これまでの会話内容に関するレポートを生成させる
++    result = converse_with_strands(
++        bot=None,
++        model_name="claude-v4.5-sonnet",  # レポートの生成に使うモデル
++        instructions=[
++            "",  # これまでの会話内容に関するレポートを生成するためのプロンプト
++        ],
++        generation_params=None,
++        guardrail=None,
++        enable_reasoning=False,
++        display_citation=False,
++        messages=[
++            SimpleMessageModel(
++                role="user",
++                content=[
++                    TextContentModel(
++                        content_type="text",
++                        body="",  # これまでの会話内容を含むメッセージ
++                    )
++                ],
++            ),
++        ],
++        search_results=[],
++        on_stream=on_stream,
++    )
++
++    # これまでの会話内容に関するレポートを含むメッセージ
++    message = result["message"]
++
++    # 生成されたレポートを使い、新たな会話ツリーで会話を開始する
++    return chat(
++        user=user,
++        chat_input=ChatInput(
++            conversation_id=request.conversation_id,
++            message=MessageInput(
++                role="user",
++                content=[
++                    TextContent(
++                        content_type="text",
++                        body="",  # これまでの会話内容に関するレポートと、それを理解させるためのプロンプトを含むメッセージ
++                    ),
++                ],
++                model=request.model,
++                parent_message_id="system",  # 新たな会話ツリーとするため、システムプロンプトを親とするルートメッセージとする
++                message_id=None,
++            ),
++            bot_id=request.bot_id,
++            continue_generate=False,
++            enable_reasoning=False,
++        ),
++        on_stream=on_stream,
++        on_stop=on_stop,
++    )
+diff --git a/backend/app/websocket.py b/backend/app/websocket.py
+index f6a805a..e3bce9a 100644
+--- a/backend/app/websocket.py
++++ b/backend/app/websocket.py
+@@ -9,12 +9,15 @@ from threading import Thread
+ from typing import BinaryIO, Literal, TypedDict
+ 
+ import boto3
++from pydantic import TypeAdapter
++
+ from app.agents.tools.agent_tool import ToolRunResult
+ from app.auth import verify_token
+ from app.repositories.conversation import RecordNotFoundError
+-from app.routes.schemas.conversation import ChatInput
++from app.routes.schemas.conversation import ChatInput, ChatRequest, CompactConversationRequest
+ from app.stream import OnStopInput, OnThinking
+ from app.usecases.chat import chat
++from app.usecases.compact_conversation import compact_conversation
+ from app.user import User
+ from boto3.dynamodb.conditions import Attr, Key
+ 
+@@ -253,6 +256,61 @@ def process_chat_input(
+         }
+ 
+ 
++def process_compact_conversation(
++    user: User,
++    request: CompactConversationRequest,
++    notificator: NotificationSender,
++) -> dict:
++    try:
++        print(f"compact_conversation: {request.model_dump_json()}")
++
++        compact_conversation(
++            user=user,
++            request=request,
++            on_stream=lambda token: notificator.on_stream(
++                token=token,
++            ),
++            on_stop=lambda arg: notificator.on_stop(
++                arg=arg,
++            ),
++        )
++        return {"statusCode": 200, "body": "Message sent."}
++
++    except RecordNotFoundError:
++        if request.bot_id:
++            return {
++                "statusCode": 404,
++                "body": json.dumps(
++                    dict(
++                        status="ERROR",
++                        reason=f"bot {request.bot_id} not found.",
++                    )
++                ),
++            }
++        else:
++            return {
++                "statusCode": 400,
++                "body": json.dumps(
++                    dict(
++                        status="ERROR",
++                        reason="Invalid request.",
++                    )
++                ),
++            }
++
++    except Exception as e:
++        logger.exception(f"Failed to run stream handler: {e}")
++        return {
++            "statusCode": 500,
++            "body": json.dumps(
++                dict(
++                    status="ERROR",
++                    reason=f"Failed to run stream handler: {e}",
++                )
++            ),
++        }
++
++
+ def handler(event, context):
+     logger.info(f"Received event: {event}")
+     route_key = event["requestContext"]["routeKey"]
+@@ -363,12 +421,20 @@ def handler(event, context):
+             full_message = "".join(item["MessagePart"] for item in message_parts)
+ 
+             # Process the concatenated full message
+-            chat_input = ChatInput(**json.loads(full_message))
+-            return process_chat_input(
+-                user=user,
+-                chat_input=chat_input,
+-                notificator=notificator,
+-            )
++            request = TypeAdapter(ChatRequest).validate_json(full_message)
++            if isinstance(request, ChatInput):
++                return process_chat_input(
++                    user=user,
++                    chat_input=request,
++                    notificator=notificator,
++                )
++
++            elif isinstance(request, CompactConversationRequest):
++                return process_compact_conversation(
++                    user=user,
++                    request=request,
++                    notificator=notificator,
++                )
+ 
+         else:
+             # Store the message part of full message
+diff --git a/frontend/src/@types/conversation.d.ts b/frontend/src/@types/conversation.d.ts
+index ed6894d..a1b6ae9 100644
+--- a/frontend/src/@types/conversation.d.ts
++++ b/frontend/src/@types/conversation.d.ts
+@@ -111,7 +111,7 @@ export type DisplayMessageContent = MessageContent & {
+   sibling: string[];
+ };
+ 
+-export type PostMessageRequest = {
++export type ChatInput = {
+   conversationId?: string;
+   message: MessageContent & {
+     parentMessageId: null | string;
+@@ -121,6 +121,22 @@ export type PostMessageRequest = {
+   enableReasoning: boolean;
+ };
+ 
++export type PostMessageRequest = {
++  type: 'post_message';
++} & ChatInput;
++
++export type CompactConversationRequest = {
++  type: 'compact_conversation';
++  conversationId?: string;
++  model: Model;
++  parentMessageId: null | string;
++  botId?: string;
++};
++
++export type ConversationRequest =
++  | PostMessageRequest
++  | CompactConversationRequest;
++
+ export type PostMessageResponse = {
+   conversationId: string;
+   createTime: number;
+diff --git a/frontend/src/hooks/useChat.ts b/frontend/src/hooks/useChat.ts
+index cacf8d9..28247bf 100644
+--- a/frontend/src/hooks/useChat.ts
++++ b/frontend/src/hooks/useChat.ts
+@@ -11,6 +11,7 @@ import {
+   PutFeedbackRequest,
+   TextContent,
+   Content,
++  CompactConversationRequest,
+ } from '../@types/conversation';
+ import useConversation from './useConversation';
+ import { create } from 'zustand';
+@@ -424,6 +425,7 @@ const useChat = () => {
+       thinkingLog: null,
+     };
+     const input: PostMessageRequest = {
++      type: 'post_message',
+       conversationId: isNewChat ? newConversationId : conversationId,
+       message: {
+         ...messageContent,
+@@ -460,7 +462,7 @@ const useChat = () => {
+           editMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT, state.context.text);
+         });
+         postStreaming({
+-          input,
++          request: input,
+           handleStreamingEvent: (event) => {
+             streamingSend(event);
+           },
+@@ -523,6 +525,7 @@ const useChat = () => {
+       thinkingLog: null,
+     };
+     const input: PostMessageRequest = {
++      type: 'post_message',
+       conversationId: conversationId,
+       message: {
+         ...messageContent,
+@@ -542,7 +545,7 @@ const useChat = () => {
+       editMessage(conversationId, currentMessage.id, currentContentBody + state.context.text);
+     });
+     postStreaming({
+-      input,
++      request: input,
+       handleStreamingEvent: (event) => {
+         streamingSend(event);
+       },
+@@ -599,6 +602,7 @@ const useChat = () => {
+     }
+ 
+     const input: PostMessageRequest = {
++      type: 'post_message',
+       conversationId: conversationId,
+       message: {
+         ...parentMessage,
+@@ -644,7 +648,64 @@ const useChat = () => {
+       editMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT, state.context.text);
+     });
+     postStreaming({
+-      input,
++      request: input,
++      handleStreamingEvent: (event) => {
++        streamingSend(event);
++      },
++    })
++      .then(() => {
++        mutate();
++      })
++      .catch((e) => {
++        console.error(e);
++        setCurrentMessageId(NEW_MESSAGE_ID.USER);
++        removeMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT);
++      })
++      .finally(() => {
++        subscription.unsubscribe();
++        setPostingMessage(false);
++      });
++  };
++
++  const compactConversation = (props?: {
++    bot?: BotInputType;
++  }) => {
++    const parentMessage = messages[messages.length - 1]
++    const request: CompactConversationRequest = {
++      type: 'compact_conversation',
++      conversationId: conversationId,
++      model: getPostedModel(),
++      parentMessageId: parentMessage.id,
++      botId: props?.bot?.botId,
++    };
++
++    setPostingMessage(true);
++
++    pushMessage(
++      conversationId,
++      parentMessage.id,
++      NEW_MESSAGE_ID.ASSISTANT,
++      {
++        role: 'assistant',
++        content: [
++          {
++            contentType: 'text',
++            body: '',
++          },
++        ],
++        model: request.model,
++        feedback: null,
++        usedChunks: null,
++        thinkingLog: null,
++      }
++    );
++    setCurrentMessageId(NEW_MESSAGE_ID.ASSISTANT);
++
++    const subscription = streamingActor.subscribe(state => {
++      editMessage(conversationId, NEW_MESSAGE_ID.ASSISTANT, state.context.text);
++    });
++    postStreaming({
++      request,
+       handleStreamingEvent: (event) => {
+         streamingSend(event);
+       },
+@@ -683,6 +744,7 @@ const useChat = () => {
+     setCurrentMessageId,
+     postChat,
+     regenerate,
++    compactConversation,
+     getPostedModel,
+     getShouldContinue,
+     continueGenerate,
+diff --git a/frontend/src/hooks/useConversationApi.ts b/frontend/src/hooks/useConversationApi.ts
+index 637aa9f..90be374 100644
+--- a/frontend/src/hooks/useConversationApi.ts
++++ b/frontend/src/hooks/useConversationApi.ts
+@@ -2,7 +2,7 @@ import { MutatorCallback, useSWRConfig } from 'swr';
+ import {
+   Conversation,
+   ConversationMeta,
+-  PostMessageRequest,
++  ChatInput,
+   PostMessageResponse,
+   RelatedDocument,
+ } from '../@types/conversation';
+@@ -32,7 +32,7 @@ const useConversationApi = () => {
+         }
+       );
+     },
+-    postMessage: (input: PostMessageRequest) => {
++    postMessage: (input: ChatInput) => {
+       return http.post<PostMessageResponse>('conversation', {
+         ...input,
+       });
+diff --git a/frontend/src/hooks/usePostMessageStreaming.ts b/frontend/src/hooks/usePostMessageStreaming.ts
+index 1cf930e..81eae0a 100644
+--- a/frontend/src/hooks/usePostMessageStreaming.ts
++++ b/frontend/src/hooks/usePostMessageStreaming.ts
+@@ -1,5 +1,5 @@
+ import { fetchAuthSession } from 'aws-amplify/auth';
+-import { PostMessageRequest } from '../@types/conversation';
++import { ConversationRequest } from '../@types/conversation';
+ import { create } from 'zustand';
+ import i18next from 'i18next';
+ import { StreamingEvent } from './xstates/streaming';
+@@ -10,7 +10,7 @@ const CHUNK_SIZE = 32 * 1024; //32KB
+ 
+ const usePostMessageStreaming = create<{
+   post: (params: {
+-    input: PostMessageRequest;
++    request: ConversationRequest;
+     hasKnowledge?: boolean;
+     handleStreamingEvent: (event: StreamingEvent) => void;
+   }) => Promise<void>;
+@@ -18,7 +18,7 @@ const usePostMessageStreaming = create<{
+ }>((set) => {
+   return {
+     errorDetail: null,
+-    post: async ({ input, handleStreamingEvent }) => {
++    post: async ({ request: input, handleStreamingEvent }) => {
+       handleStreamingEvent({ type: 'wakeup' });
+ 
+       const token = (await fetchAuthSession()).tokens?.idToken?.toString();
+diff --git a/frontend/src/hooks/useScroll.ts b/frontend/src/hooks/useScroll.ts
+index 400dbae..1a2d590 100644
+--- a/frontend/src/hooks/useScroll.ts
++++ b/frontend/src/hooks/useScroll.ts
+@@ -10,7 +10,7 @@ const useScroll = () => {
+     }
+     const listener = () => {
+       // 最下部までスクロールしている場合は、自動スクロールする
+-      if (elem.scrollTop + elem.clientHeight === elem.scrollHeight) {
++      if (elem.scrollTop + elem.clientHeight + 1 >= elem.scrollHeight) {
+         setDisabled(false);
+       } else {
+         setDisabled(true);
+diff --git a/frontend/src/pages/ChatPage.tsx b/frontend/src/pages/ChatPage.tsx
+index 18c2e58..c546e2b 100644
+--- a/frontend/src/pages/ChatPage.tsx
++++ b/frontend/src/pages/ChatPage.tsx
+@@ -81,6 +81,7 @@ const ChatPage: React.FC = () => {
+     retryPostChat,
+     setCurrentMessageId,
+     regenerate,
++    compactConversation,
+     continueGenerate,
+     getPostedModel,
+     loadingConversation,
+@@ -231,6 +232,15 @@ const ChatPage: React.FC = () => {
+     [inputBotParams, regenerate]
+   );
+ 
++  const onCompactConversation = useCallback(
++    () => {
++      compactConversation({
++        bot: inputBotParams,
++      });
++    },
++    [inputBotParams, compactConversation]
++  );
++
+   const onContinueGenerate = useCallback(() => {
+     continueGenerate({ bot: inputBotParams });
+   }, [inputBotParams, continueGenerate]);

@@ -81,6 +81,7 @@ const ChatPage: React.FC = () => {
     retryPostChat,
     setCurrentMessageId,
     regenerate,
+    compactConversation,
     continueGenerate,
     getPostedModel,
     loadingConversation,
@@ -229,6 +230,15 @@ const ChatPage: React.FC = () => {
       });
     },
     [inputBotParams, regenerate]
+  );
+
+  const onCompactConversation = useCallback(
+    () => {
+      compactConversation({
+        bot: inputBotParams,
+      });
+    },
+    [inputBotParams, compactConversation]
   );
 
   const onContinueGenerate = useCallback(() => {
