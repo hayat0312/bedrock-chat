@@ -699,6 +699,7 @@ const translation: typeof en = {
       SaveAndSubmit: '変更 & 送信',
       resend: '再送信',
       regenerate: '再生成',
+      compact: 'コンパクト',
       delete: '削除',
       deleteAll: 'すべて削除',
       done: '完了',

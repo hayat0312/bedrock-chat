@@ -9,6 +9,7 @@ const defaultProps = {
   isNewChat: false,
   onSend: () => {},
   onRegenerate: () => {},
+  onCompactConversation: () => {},
   continueGenerate: () => {},
 };
 

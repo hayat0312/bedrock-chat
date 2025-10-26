@@ -701,6 +701,7 @@ const ChatPage: React.FC = () => {
           isNewChat={messages.length == 0}
           onSend={onSend}
           onRegenerate={onRegenerate}
+          onCompactConversation={onCompactConversation}
           continueGenerate={onContinueGenerate}
           ref={focusInputRef}
           supportReasoning={supportReasoning}

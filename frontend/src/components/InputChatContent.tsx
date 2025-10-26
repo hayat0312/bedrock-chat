@@ -53,6 +53,7 @@ type Props = BaseProps & {
     attachments?: AttachmentType[]
   ) => void;
   onRegenerate: (enableReasoning: boolean) => void;
+  onCompactConversation: () => void;
   continueGenerate: () => void;
   supportReasoning: boolean;
   reasoningEnabled: boolean;
@@ -588,6 +589,13 @@ const InputChatContent = forwardRef<HTMLElement, Props>(
                 }}>
                 <PiArrowsCounterClockwise className="mr-2" />
                 {t('button.regenerate')}
+              </Button>
+              <Button
+                className="bg-aws-paper-light p-2 text-sm dark:bg-aws-paper-dark"
+                outlined
+                disabled={props.disabledRegenerate || props.disabled}
+                onClick={props.onCompactConversation}>
+                {t('button.compact')}
               </Button>
             </div>
           )}
