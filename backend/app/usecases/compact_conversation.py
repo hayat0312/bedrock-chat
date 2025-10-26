@@ -43,7 +43,7 @@ def compact_conversation(
         bot=None,
         model_name="claude-v4.5-sonnet",  # レポートの生成に使うモデル
         instructions=[
-            "",  # これまでの会話内容に関するレポートを生成するためのプロンプト
+            "ここまでの会話内容をレポートにまとめて",  # これまでの会話内容に関するレポートを生成するためのプロンプト
         ],
         generation_params=None,
         guardrail=None,
@@ -55,7 +55,7 @@ def compact_conversation(
                 content=[
                     TextContentModel(
                         content_type="text",
-                        body="",  # これまでの会話内容を含むメッセージ
+                        body=str(messages),  # これまでの会話内容を含むメッセージ
                     )
                 ],
             ),
@@ -66,6 +66,8 @@ def compact_conversation(
 
     # これまでの会話内容に関するレポートを含むメッセージ
     message = result["message"]
+    print("！！！ ", message)
+
 
     # 生成されたレポートを使い、新たな会話ツリーで会話を開始する
     return chat(
@@ -77,7 +79,7 @@ def compact_conversation(
                 content=[
                     TextContent(
                         content_type="text",
-                        body="",  # これまでの会話内容に関するレポートと、それを理解させるためのプロンプトを含むメッセージ
+                        body="これまでの会話内容を理解して。 " + str(message),  # これまでの会話内容に関するレポートと、それを理解させるためのプロンプトを含むメッセージ
                     ),
                 ],
                 model=request.model,

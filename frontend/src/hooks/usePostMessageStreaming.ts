@@ -22,10 +22,23 @@ const usePostMessageStreaming = create<{
       handleStreamingEvent({ type: 'wakeup' });
 
       const token = (await fetchAuthSession()).tokens?.idToken?.toString();
-      const payloadString = JSON.stringify({
+      
+      // Validate and ensure type field is always present
+      if (!input.type) {
+        console.error('[FRONTEND_WS] Missing type field in request:', input);
+        throw new Error('Request must have a type field');
+      }
+      
+      const payload = {
         ...input,
         token,
-      });
+      };
+      
+      // Debug: Log the payload to ensure type field is included
+      console.log('[FRONTEND_WS] Payload being sent:', payload);
+      console.log('[FRONTEND_WS] Payload type field:', payload.type);
+      
+      const payloadString = JSON.stringify(payload);
 
       // chunking
       const chunkedPayloads: string[] = [];
