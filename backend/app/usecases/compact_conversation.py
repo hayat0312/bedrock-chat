@@ -23,6 +23,45 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+def format_messages_for_compact(messages):
+    """Format messages into alternating user_prompt and agent_reply format for compact conversation"""
+    formatted = []
+
+    for message in messages:
+        # Skip system messages (empty content)
+        if message.role == 'system':
+            continue
+
+        # Get the text content from the message
+        if message.content and len(message.content) > 0:
+            # Handle both TextContentModel and other content types
+            content = ""
+            for content_item in message.content:
+                if hasattr(content_item, 'body'):
+                    content += content_item.body
+                elif hasattr(content_item, 'text'):
+                    content += content_item.text
+
+            if content:  # Only add if there's actual content
+                if message.role == 'user':
+                    formatted.append(f"user_prompt:{content}")
+                elif message.role == 'assistant':
+                    formatted.append(f"agent_reply:{content}")
+
+    return str(formatted)
+
+
+def extract_body_from_message(message):
+    """Extract body content from MessageModel structure"""
+    if hasattr(message, 'content') and message.content:
+        for content_item in message.content:
+            if hasattr(content_item, 'body'):
+                return content_item.body
+            elif hasattr(content_item, 'text'):
+                return content_item.text
+    return str(message)  # Fallback to string representation
+
+
 def compact_conversation(
     user: User,
     request: CompactConversationRequest,
@@ -37,13 +76,18 @@ def compact_conversation(
         node_id=request.parent_message_id,
         message_map=message_map,
     )
+    formatted_messages = format_messages_for_compact(messages)
+    print("フォーマット" + formatted_messages)
 
     # strands agents を使って、これまでの会話内容に関するレポートを生成させる
     result = converse_with_strands(
         bot=None,
         model_name="claude-v4.5-sonnet",  # レポートの生成に使うモデル
         instructions=[
-            "ここまでの会話内容をレポートにまとめて",  # これまでの会話内容に関するレポートを生成するためのプロンプト
+            "Read the following conversation with user and AI agent and create a summary report to compress the context volume. " +
+            "This report aims to significantly reduce the token count while preserving the essential elements of the original information. " +
+            "Create in a format that is easy for GenAI to understand, keeping in mind that GenAI will read this report later, take over the context, and resume the conversation." +
+            "Write in the language used in conversation up until now.",
         ],
         generation_params=None,
         guardrail=None,
@@ -55,7 +99,7 @@ def compact_conversation(
                 content=[
                     TextContentModel(
                         content_type="text",
-                        body=str(messages),  # これまでの会話内容を含むメッセージ
+                        body=formatted_messages,  # フォーマットされた会話内容を含むメッセージ
                     )
                 ],
             ),
@@ -65,9 +109,12 @@ def compact_conversation(
     )
 
     # これまでの会話内容に関するレポートを含むメッセージ
-    message = result["message"]
-    print("！！！ ", message)
+    summary = result["message"]
+    print("！！！ ", summary)
 
+    # summaryからbodyの中身だけを取り出す
+    summary_body = extract_body_from_message(summary)
+    print("Summary body: ", summary_body)
 
     # 生成されたレポートを使い、新たな会話ツリーで会話を開始する
     return chat(
@@ -79,7 +126,10 @@ def compact_conversation(
                 content=[
                     TextContent(
                         content_type="text",
-                        body="これまでの会話内容を理解して。 " + str(message),  # これまでの会話内容に関するレポートと、それを理解させるためのプロンプトを含むメッセージ
+                        # これまでの会話内容に関するレポートと、それを理解させるためのプロンプトを含むメッセージ
+                        body="Read the report shown below and understand the conversation so far. " +
+                        "Briefly display the content in the language the report was written in." +
+                        summary_body,
                     ),
                 ],
                 model=request.model,
