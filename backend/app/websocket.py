@@ -14,10 +14,10 @@ from pydantic import TypeAdapter
 from app.agents.tools.agent_tool import ToolRunResult
 from app.auth import verify_token
 from app.repositories.conversation import RecordNotFoundError, find_conversation_by_id
-from app.routes.schemas.conversation import ChatInput, ChatRequest, CompactConversationRequest
+from app.routes.schemas.conversation import ChatInput, ChatRequest, CompressConversationRequest
 from app.stream import OnStopInput, OnThinking
 from app.usecases.chat import chat
-from app.usecases.compact_conversation import compact_conversation
+from app.usecases.compress_conversation import compress_conversation
 from app.user import User
 from boto3.dynamodb.conditions import Attr, Key
 
@@ -117,7 +117,8 @@ class NotificationSender:
         self.notify(payload=payload)
 
     def on_stop(self, arg: OnStopInput):
-        logger.debug(f"[WEBSOCKET_ON_STOP] WebSocket on_stop called with: {arg}")
+        logger.debug(
+            f"[WEBSOCKET_ON_STOP] WebSocket on_stop called with: {arg}")
         payload = json.dumps(
             dict(
                 status="STREAMING_END",
@@ -137,7 +138,8 @@ class NotificationSender:
             f"[WEBSOCKET_ON_STOP] Sending STREAMING_END payload: {payload.decode('utf-8')}"
         )
         self.notify(payload=payload)
-        logger.debug(f"[WEBSOCKET_ON_STOP] STREAMING_END payload sent successfully")
+        logger.debug(
+            f"[WEBSOCKET_ON_STOP] STREAMING_END payload sent successfully")
 
     def on_agent_thinking(self, tool_use: OnThinking):
         payload = json.dumps(
@@ -256,15 +258,15 @@ def process_chat_input(
         }
 
 
-def process_compact_conversation(
+def process_compress_conversation(
     user: User,
-    request: CompactConversationRequest,
+    request: CompressConversationRequest,
     notificator: NotificationSender,
 ) -> dict:
     try:
-        print(f"compact_conversation: {request.model_dump_json()}")
+        print(f"compress_conversation: {request.model_dump_json()}")
 
-        compact_conversation(
+        compress_conversation(
             user=user,
             request=request,
             on_stream=lambda token: notificator.on_stream(
@@ -398,14 +400,16 @@ def handler(event, context):
             while True:
                 if last_evaluated_key:
                     response = table.query(
-                        KeyConditionExpression=Key("ConnectionId").eq(connection_id)
+                        KeyConditionExpression=Key(
+                            "ConnectionId").eq(connection_id)
                         # Zero is reserved for user id, so start from 1
                         & Key("MessagePartId").gte(1),
                         ExclusiveStartKey=last_evaluated_key,
                     )
                 else:
                     response = table.query(
-                        KeyConditionExpression=Key("ConnectionId").eq(connection_id)
+                        KeyConditionExpression=Key(
+                            "ConnectionId").eq(connection_id)
                         & Key("MessagePartId").gte(1),
                     )
 
@@ -418,13 +422,15 @@ def handler(event, context):
 
             logger.info(f"Number of message chunks: {len(message_parts)}")
             message_parts.sort(key=lambda x: x["MessagePartId"])
-            full_message = "".join(item["MessagePart"] for item in message_parts)
-            
+            full_message = "".join(item["MessagePart"]
+                                   for item in message_parts)
+
             # Debug: Log the received message
             logger.info(f"Received full message: {full_message[:500]}...")
             try:
                 message_data = json.loads(full_message)
-                logger.info(f"Message data type field: {message_data.get('type', 'MISSING')}")
+                logger.info(
+                    f"Message data type field: {message_data.get('type', 'MISSING')}")
             except Exception as e:
                 logger.error(f"Failed to parse message as JSON: {e}")
 
@@ -437,8 +443,8 @@ def handler(event, context):
                     notificator=notificator,
                 )
 
-            elif isinstance(request, CompactConversationRequest):
-                return process_compact_conversation(
+            elif isinstance(request, CompressConversationRequest):
+                return process_compress_conversation(
                     user=user,
                     request=request,
                     notificator=notificator,

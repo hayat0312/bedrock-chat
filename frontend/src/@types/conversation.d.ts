@@ -125,8 +125,8 @@ export type PostMessageRequest = {
   type: 'post_message';
 } & ChatInput;
 
-export type CompactConversationRequest = {
-  type: 'compact_conversation';
+export type CompressConversationRequest = {
+  type: 'compress_conversation';
   conversationId?: string;
   model: Model;
   parentMessageId: null | string;
@@ -135,7 +135,7 @@ export type CompactConversationRequest = {
 
 export type ConversationRequest =
   | PostMessageRequest
-  | CompactConversationRequest;
+  | CompressConversationRequest;
 
 export type PostMessageResponse = {
   conversationId: string;
@@ -152,7 +152,7 @@ export type ConversationMeta = {
   id: string;
   title: string;
   createTime: number;
-  lastMessageId: string; 
+  lastMessageId: string;
   model: Model;
   botId?: string;
 };

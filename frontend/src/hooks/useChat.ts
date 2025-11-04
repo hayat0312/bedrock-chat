@@ -11,7 +11,7 @@ import {
   PutFeedbackRequest,
   TextContent,
   Content,
-  CompactConversationRequest,
+  CompressConversationRequest,
 } from '../@types/conversation';
 import useConversation from './useConversation';
 import { create } from 'zustand';
@@ -41,8 +41,8 @@ export type AttachmentType = {
 
 export type ThinkingAction =
   | {
-      type: 'doing';
-    }
+    type: 'doing';
+  }
   | { type: 'init' };
 
 const NEW_MESSAGE_ID = {
@@ -667,12 +667,12 @@ const useChat = () => {
       });
   };
 
-  const compactConversation = (props?: {
+  const compressConversation = (props?: {
     bot?: BotInputType;
   }) => {
     const parentMessage = messages[messages.length - 1]
-    const request: CompactConversationRequest = {
-      type: 'compact_conversation',
+    const request: CompressConversationRequest = {
+      type: 'compress_conversation',
       conversationId: conversationId,
       model: getPostedModel(),
       parentMessageId: parentMessage.id,
@@ -744,7 +744,7 @@ const useChat = () => {
     setCurrentMessageId,
     postChat,
     regenerate,
-    compactConversation,
+    compressConversation,
     getPostedModel,
     getShouldContinue,
     continueGenerate,
@@ -773,10 +773,10 @@ const useChat = () => {
           enableReasoning: params.enableReasoning,
           bot: params.bot
             ? {
-                botId: params.bot.botId,
-                hasKnowledge: params.bot.hasKnowledge,
-                hasAgent: params.bot.hasAgent,
-              }
+              botId: params.bot.botId,
+              hasKnowledge: params.bot.hasKnowledge,
+              hasAgent: params.bot.hasAgent,
+            }
             : undefined,
         });
       } else {

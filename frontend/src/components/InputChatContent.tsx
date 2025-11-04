@@ -14,6 +14,7 @@ import {
   PiArrowsCounterClockwise,
   PiX,
   PiArrowFatLineRight,
+  PiArrowsIn,
 } from 'react-icons/pi';
 import { LuFilePlus2 } from 'react-icons/lu';
 import { useTranslation } from 'react-i18next';
@@ -53,7 +54,7 @@ type Props = BaseProps & {
     attachments?: AttachmentType[]
   ) => void;
   onRegenerate: (enableReasoning: boolean) => void;
-  onCompactConversation: () => void;
+  onCompressConversation: () => void;
   continueGenerate: () => void;
   supportReasoning: boolean;
   reasoningEnabled: boolean;
@@ -594,8 +595,9 @@ const InputChatContent = forwardRef<HTMLElement, Props>(
                 className="bg-aws-paper-light p-2 text-sm dark:bg-aws-paper-dark"
                 outlined
                 disabled={props.disabledRegenerate || props.disabled}
-                onClick={props.onCompactConversation}>
-                {t('button.compact')}
+                onClick={props.onCompressConversation}>
+                <PiArrowsIn className="mr-2" />
+                {t('button.compress')}
               </Button>
             </div>
           )}

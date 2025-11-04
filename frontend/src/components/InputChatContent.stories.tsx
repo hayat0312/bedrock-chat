@@ -3,14 +3,14 @@ import { useState } from 'react';
 
 const defaultProps = {
   reasoningEnabled: false,
-  onChangeReasoning: () => {},
+  onChangeReasoning: () => { },
   supportReasoning: true,
   isLoading: false,
   isNewChat: false,
-  onSend: () => {},
-  onRegenerate: () => {},
-  onCompactConversation: () => {},
-  continueGenerate: () => {},
+  onSend: () => { },
+  onRegenerate: () => { },
+  onCompressConversation: () => { },
+  continueGenerate: () => { },
 };
 
 export const Ideal = () => {

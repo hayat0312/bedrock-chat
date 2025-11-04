@@ -9,7 +9,7 @@ from app.repositories.models.conversation import (
     TextContentModel,
 )
 from app.routes.schemas.conversation import (
-    CompactConversationRequest,
+    CompressConversationRequest,
     ChatInput,
     MessageInput,
     TextContent,
@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def format_messages_for_compact(messages):
-    """Format messages into alternating user_prompt and agent_reply format for compact conversation"""
+def format_messages_for_compress(messages):
+    """Format messages into alternating user_prompt and agent_reply format for compress conversation"""
     formatted = []
 
     for message in messages:
@@ -62,27 +62,27 @@ def extract_body_from_message(message):
     return str(message)  # Fallback to string representation
 
 
-def compact_conversation(
+def compress_conversation(
     user: User,
-    request: CompactConversationRequest,
+    request: CompressConversationRequest,
     on_stream: Callable[[str], None] | None = None,
     on_stop: Callable[[OnStopInput], None] | None = None,
 ) -> tuple[ConversationModel, MessageModel]:
     conversation = find_conversation_by_id(user.id, request.conversation_id)
     message_map = conversation.message_map
 
-    # これまでの会話内容
+    # Conversations so far
     messages = trace_to_root(
         node_id=request.parent_message_id,
         message_map=message_map,
     )
-    formatted_messages = format_messages_for_compact(messages)
+    formatted_messages = format_messages_for_compress(messages)
     print("フォーマット" + formatted_messages)
 
-    # strands agents を使って、これまでの会話内容に関するレポートを生成させる
+    # Use strands agents to generate reports on conversations so far
     result = converse_with_strands(
         bot=None,
-        model_name="claude-v4.5-sonnet",  # レポートの生成に使うモデル
+        model_name="claude-v4.5-sonnet",
         instructions=[
             "Read the following conversation with user and AI agent and create a summary report to compress the context volume. " +
             "This report aims to significantly reduce the token count while preserving the essential elements of the original information. " +
@@ -99,7 +99,7 @@ def compact_conversation(
                 content=[
                     TextContentModel(
                         content_type="text",
-                        body=formatted_messages,  # フォーマットされた会話内容を含むメッセージ
+                        body=formatted_messages,  # A message containing a formatted conversation
                     )
                 ],
             ),
@@ -108,15 +108,13 @@ def compact_conversation(
         on_stream=on_stream,
     )
 
-    # これまでの会話内容に関するレポートを含むメッセージ
+    # A message containing a report on the conversation so far
     summary = result["message"]
-    print("！！！ ", summary)
 
-    # summaryからbodyの中身だけを取り出す
     summary_body = extract_body_from_message(summary)
     print("Summary body: ", summary_body)
 
-    # 生成されたレポートを使い、新たな会話ツリーで会話を開始する
+    # Use generated reports to start conversations in a new conversation tree
     return chat(
         user=user,
         chat_input=ChatInput(
@@ -126,14 +124,14 @@ def compact_conversation(
                 content=[
                     TextContent(
                         content_type="text",
-                        # これまでの会話内容に関するレポートと、それを理解させるためのプロンプトを含むメッセージ
                         body="Read the report shown below and understand the conversation so far. " +
                         "Briefly display the content in the language the report was written in." +
                         summary_body,
                     ),
                 ],
                 model=request.model,
-                parent_message_id="system",  # 新たな会話ツリーとするため、システムプロンプトを親とするルートメッセージとする
+                # In order to create a new conversation tree, use the system prompt as the root message as the parent
+                parent_message_id="system",
                 message_id=None,
             ),
             bot_id=request.bot_id,

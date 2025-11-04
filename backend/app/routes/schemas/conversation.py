@@ -185,7 +185,8 @@ class MessageInput(BaseSchema):
 
 
 class MessageOutput(BaseSchema):
-    role: str = Field(..., description="Role of the message. Either `user` or `bot`.")
+    role: str = Field(...,
+                      description="Role of the message. Either `user` or `bot`.")
     content: list[Content]
     model: type_model_name
     children: list[str]
@@ -207,8 +208,8 @@ class PostMessageRequest(ChatInput):
     type: Literal["post_message"]
 
 
-class CompactConversationRequest(BaseSchema):
-    type: Literal["compact_conversation"]
+class CompressConversationRequest(BaseSchema):
+    type: Literal["compress_conversation"]
     conversation_id: str
     model: type_model_name
     parent_message_id: str | None
@@ -217,7 +218,7 @@ class CompactConversationRequest(BaseSchema):
 
 ChatRequest = Annotated[
     PostMessageRequest
-    | CompactConversationRequest,
+    | CompressConversationRequest,
     Discriminator("type"),
 ]
 

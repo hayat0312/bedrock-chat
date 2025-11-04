@@ -81,7 +81,7 @@ const ChatPage: React.FC = () => {
     retryPostChat,
     setCurrentMessageId,
     regenerate,
-    compactConversation,
+    compressConversation,
     continueGenerate,
     getPostedModel,
     loadingConversation,
@@ -170,10 +170,10 @@ const ChatPage: React.FC = () => {
   const inputBotParams = useMemo(() => {
     return botId
       ? {
-          botId: botId,
-          hasKnowledge: bot?.hasKnowledge ?? false,
-          hasAgent: bot?.hasAgent ?? false,
-        }
+        botId: botId,
+        hasKnowledge: bot?.hasKnowledge ?? false,
+        hasAgent: bot?.hasAgent ?? false,
+      }
       : undefined;
   }, [bot?.hasKnowledge, botId, bot?.hasAgent]);
 
@@ -232,13 +232,13 @@ const ChatPage: React.FC = () => {
     [inputBotParams, regenerate]
   );
 
-  const onCompactConversation = useCallback(
+  const onCompressConversation = useCallback(
     () => {
-      compactConversation({
+      compressConversation({
         bot: inputBotParams,
       });
     },
-    [inputBotParams, compactConversation]
+    [inputBotParams, compressConversation]
   );
 
   const onContinueGenerate = useCallback(() => {
@@ -464,11 +464,11 @@ const ChatPage: React.FC = () => {
 
       isPinnedBot(bot.sharedStatus)
         ? unpinBot(bot.id).finally(() => {
-            mutateBot();
-          })
+          mutateBot();
+        })
         : pinBot(bot.id, 0).finally(() => {
-            mutateBot();
-          });
+          mutateBot();
+        });
     },
     [mutateBot, pinBot, unpinBot]
   );
@@ -540,15 +540,15 @@ const ChatPage: React.FC = () => {
                     })}
                     {...(canSwitchPinned
                       ? {
-                          onClickSwitchPinned: () => {
-                            bot && togglePinBot(bot);
-                          },
-                          isPinned: isPinnedBot(bot?.sharedStatus ?? ''),
-                        }
+                        onClickSwitchPinned: () => {
+                          bot && togglePinBot(bot);
+                        },
+                        isPinned: isPinnedBot(bot?.sharedStatus ?? ''),
+                      }
                       : {
-                          isPinned: undefined,
-                          onClickSwitchPinned: undefined,
-                        })}
+                        isPinned: undefined,
+                        onClickSwitchPinned: undefined,
+                      })}
                   />
                 </div>
               </div>
@@ -604,11 +604,10 @@ const ChatPage: React.FC = () => {
                   {messages?.map((message, idx, array) => (
                     <div
                       key={idx}
-                      className={`${
-                        message.role === 'assistant'
-                          ? 'bg-aws-squid-ink-light/5 dark:bg-aws-squid-ink-dark/35'
-                          : ''
-                      }`}>
+                      className={`${message.role === 'assistant'
+                        ? 'bg-aws-squid-ink-light/5 dark:bg-aws-squid-ink-dark/35'
+                        : ''
+                        }`}>
                       <ChatMessageWithRelatedDocuments
                         chatContent={message}
                         isStreaming={postingMessage && idx + 1 === array.length}
@@ -701,7 +700,7 @@ const ChatPage: React.FC = () => {
           isNewChat={messages.length == 0}
           onSend={onSend}
           onRegenerate={onRegenerate}
-          onCompactConversation={onCompactConversation}
+          onCompressConversation={onCompressConversation}
           continueGenerate={onContinueGenerate}
           ref={focusInputRef}
           supportReasoning={supportReasoning}
