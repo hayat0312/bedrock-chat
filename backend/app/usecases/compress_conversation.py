@@ -77,7 +77,6 @@ def compress_conversation(
         message_map=message_map,
     )
     formatted_messages = format_messages_for_compress(messages)
-    print("フォーマット" + formatted_messages)
 
     # Use strands agents to generate reports on conversations so far
     result = converse_with_strands(
@@ -110,9 +109,7 @@ def compress_conversation(
 
     # A message containing a report on the conversation so far
     summary = result["message"]
-
     summary_body = extract_body_from_message(summary)
-    print("Summary body: ", summary_body)
 
     # Use generated reports to start conversations in a new conversation tree
     return chat(

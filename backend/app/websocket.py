@@ -422,17 +422,7 @@ def handler(event, context):
 
             logger.info(f"Number of message chunks: {len(message_parts)}")
             message_parts.sort(key=lambda x: x["MessagePartId"])
-            full_message = "".join(item["MessagePart"]
-                                   for item in message_parts)
-
-            # Debug: Log the received message
-            logger.info(f"Received full message: {full_message[:500]}...")
-            try:
-                message_data = json.loads(full_message)
-                logger.info(
-                    f"Message data type field: {message_data.get('type', 'MISSING')}")
-            except Exception as e:
-                logger.error(f"Failed to parse message as JSON: {e}")
+            full_message = "".join(item["MessagePart"] for item in message_parts)
 
             # Process the concatenated full message
             request = TypeAdapter(ChatRequest).validate_json(full_message)
