@@ -13,7 +13,7 @@ from pydantic import TypeAdapter
 
 from app.agents.tools.agent_tool import ToolRunResult
 from app.auth import verify_token
-from app.repositories.conversation import RecordNotFoundError, find_conversation_by_id
+from app.repositories.conversation import RecordNotFoundError
 from app.routes.schemas.conversation import ChatInput, ChatRequest, CompressConversationRequest
 from app.stream import OnStopInput, OnThinking
 from app.usecases.chat import chat
@@ -422,7 +422,8 @@ def handler(event, context):
 
             logger.info(f"Number of message chunks: {len(message_parts)}")
             message_parts.sort(key=lambda x: x["MessagePartId"])
-            full_message = "".join(item["MessagePart"] for item in message_parts)
+            full_message = "".join(item["MessagePart"]
+                                   for item in message_parts)
 
             # Process the concatenated full message
             request = TypeAdapter(ChatRequest).validate_json(full_message)
